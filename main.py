@@ -8,18 +8,19 @@ import json
 import logging
 import os
 from datetime import datetime, date
-from typing import Optional
+from threading import Thread
 
 import pytz
+from flask import Flask
 from telegram import Update
-from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # Logging simple
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuración
-TOKEN = "8078347729:AAGME0GBMgLh4AgvdF1ChtbWxLW4sRvfS1M"
+TOKEN = os.environ.get("TOKEN", "tu_token_aqui")  # Mejor usar variable de entorno en Railway
 PERSONAS = ["Sebastián", "Francisca"]
 TIMEZONE = pytz.timezone('America/Santiago')
 
@@ -33,15 +34,15 @@ class SimpleState:
             if os.path.exists("state.json"):
                 with open("state.json", "r") as f:
                     self.data = json.load(f)
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error cargando estado: {e}")
     
     def save(self):
         try:
             with open("state.json", "w") as f:
                 json.dump(self.data, f)
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error guardando estado: {e}")
     
     def get_turn(self):
         return self.data.get("turno", 0)
@@ -71,6 +72,22 @@ class SimpleState:
         return self.data.get("chat_id")
 
 state = SimpleState()
+
+# Flask app para mantener vivo Railway
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot activo"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /start"""
@@ -178,40 +195,4 @@ async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
     current_person = PERSONAS[state.get_turn()]
     
     if last_day is None or last_day < today:
-        days_passed = 0 if last_day is None else (today - last_day).days
-        
-        if days_passed <= 1:
-            message = f"🔔 {current_person}, te toca recoger las cacas 💩\nMarca /hecho cuando termines"
-        else:
-            message = f"⚠️ {current_person}, han pasado {days_passed} días!\nRecoger las cacas 💩 y marca /hecho"
-        
-        try:
-            await context.bot.send_message(chat_id=chat_id, text=message)
-            logger.info(f"Recordatorio enviado a {current_person}")
-        except Exception as e:
-            logger.error(f"Error enviando recordatorio: {e}")
-
-def main():
-    """Función principal simple"""
-    logger.info("Iniciando bot de Telegram...")
-    
-    app = ApplicationBuilder().token(TOKEN).build()
-    
-    # Registrar comandos
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("hecho", hecho_command))
-    app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CommandHandler("help", help_command))
-    
-    # Configurar recordatorios cada 3 horas
-    job_queue = app.job_queue
-    if job_queue:
-        job_queue.run_repeating(reminder_job, interval=10800, first=30)
-    
-    logger.info("Bot configurado. Iniciando polling...")
-    
-    # Ejecutar bot
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
+        days_passed = 0 if last_day is None else (
