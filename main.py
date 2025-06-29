@@ -192,6 +192,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👤 Turno: {current_person}\n"
         f"📅 Último día: {last_day.strftime('%d/%m/%Y') if last_day else 'Nunca'}\n"
         f"🕐 Hora Chile: {now.strftime('%d/%m/%Y %H:%M')}\n\n"
+        f"⏰ Recordatorios enviados solo entre 8 AM y 10 PM\n\n"
         f"Personas:\n"
     )
     
